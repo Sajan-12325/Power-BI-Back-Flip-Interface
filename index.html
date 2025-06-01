@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IAV Subtypes Flashcard Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 400px;
+        }
+        .flashcard {
+            perspective: 1000px;
+            width: 100%;
+            height: 400px;
+            display: none;
+        }
+        .flashcard-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            transition: transform 0.6s;
+            transform-style: preserve-3d;
+        }
+        .flashcard-front, .flashcard-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            border-radius: 10px;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .flashcard-front {
+            background: #fff;
+        }
+        .flashcard-back {
+            background: #e3f2fd;
+            transform: rotateY(180deg);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+        .flashcard-back h3 {
+            color: #1976d2;
+            margin-bottom: 10px;
+        }
+        .flashcard-back p {
+            margin: 5px 0;
+            font-size: 16px;
+        }
+        .flashcard-back button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background: #1976d2;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .flashcard-inner.flipped {
+            transform: rotateY(180deg);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>IAV Subtypes Dashboard</h1>
+        <div class="chart-container">
+            <canvas id="iavChart"></canvas>
+        </div>
+        <div class="flashcard" id="flashcard">
+            <div class="flashcard-inner" id="flashcardInner">
+                <div class="flashcard-front">
+                    <canvas id="iavChartBack"></canvas>
+                </div>
+                <div class="flashcard-back" id="flashcardBack">
+                    <h3 id="flashcardTitle"></h3>
+                    <p id="totalSamples"></p>
+                    <p id="topSubtype"></p>
+                    <p id="yearChange"></p>
+                    <p id="insight"></p>
+                    <button onclick="flipBack()">Back to Chart</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Data based on the image (approximated from visual inspection)
+        const years = ['2012', '2015', '2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023', '2024', '2025'];
+        const subtypeData = {
+            'H1N1': [40, 60, 70, 60, 50, 40, 30, 20, 20, 20, 20, 20], // Blue
+            'H3N2': [20, 20, 10, 20, 30, 30, 40, 50, 50, 50, 50, 50], // Red
+            'H1N2': [20, 10, 10, 10, 10, 15, 15, 15, 15, 15, 15, 15], // Yellow
+            'Other': [20, 10, 10, 10, 10, 15, 15, 15, 15, 15, 15, 15]  // Purple/Gray mix
+        };
+        const sampleCounts = [50, 46, 17, 24, 33, 75, 67, 47, 1, 1, 1, 1]; // Number of samples per year
+
+        const ctx = document.getElementById('iavChart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: years,
+                datasets: [
+                    {
+                        label: 'H1N1',
+                        data: subtypeData['H1N1'],
+                        backgroundColor: '#42a5f5',
+                    },
+                    {
+                        label: 'H3N2',
+                        data: subtypeData['H3N2'],
+                        backgroundColor: '#ef5350',
+                    },
+                    {
+                        label: 'H1N2',
+                        data: subtypeData['H1N2'],
+                        backgroundColor: '#ffca28',
+                    },
+                    {
+                        label: 'Other',
+                        data: subtypeData['Other'],
+                        backgroundColor: '#ce93d8',
+                    }
+                ]
+            },
+            options: {
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'IAV Subtype Distribution (%) - Source: ISU, UMN, SDSU, KSU, Ohio, Purdue VDLs'
+                    }
+                },
+                scales: {
+                    x: {
+                        stacked: true,
+                    },
+                    y: {
+                        stacked: true,
+                        beginAtZero: true,
+                        max: 100,
+                        title: {
+                            display: true,
+                            text: '% of Detections'
+                        }
+                    }
+                },
+                onClick: (e, elements) => {
+                    if (elements.length > 0) {
+                        const index = elements[0].index;
+                        showFlashcard(index);
+                    }
+                }
+            }
+        });
+
+        function showFlashcard(index) {
+            const year = years[index];
+            const total = sampleCounts[index];
+            const h1n1 = subtypeData['H1N1'][index];
+            const h3n2 = subtypeData['H3N2'][index];
+            const h1n2 = subtypeData['H1N2'][index];
+            const topSubtype = Math.max(h1n1, h3n2, h1n2) === h1n1 ? 'H1N1' : Math.max(h3n2, h1n2) === h3n2 ? 'H3N2' : 'H1N2';
+            const topPercentage = Math.max(h1n1, h3n2, h1n2);
+            const prevTop = index > 0 ? Math.max(subtypeData['H1N1'][index - 1], subtypeData['H3N2'][index - 1], subtypeData['H1N2'][index - 1]) : topPercentage;
+            const change = ((topPercentage - prevTop) / prevTop * 100).toFixed(1);
+
+            document.getElementById('flashcardTitle').textContent = `Summary for ${year}`;
+            document.getElementById('totalSamples').textContent = `Total Samples Tested: ${total} (Nasal Swab Dominant)`;
+            document.getElementById('topSubtype').textContent = `Top Subtype: ${topSubtype} (${topPercentage}%)`;
+            document.getElementById('yearChange').textContent = `Change from Previous Year: ${change > 0 ? '+' : ''}${change}%`;
+            document.getElementById('insight').textContent = `Insight: Increase surveillance for ${topSubtype} in ${year}, focusing on Grow-Finish category.`;
+
+            document.getElementById('iavChart').style.display = 'none';
+            const flashcard = document.getElementById('flashcard');
+            flashcard.style.display = 'block';
+            document.getElementById('flashcardInner').classList.add('flipped');
+        }
+
+        function flipBack() {
+            document.getElementById('flashcardInner').classList.remove('flipped');
+            setTimeout(() => {
+                document.getElementById('flashcard').style.display = 'none';
+                document.getElementById('iavChart').style.display = 'block';
+            }, 600);
+        }
+    </script>
+</body>
+</html>
